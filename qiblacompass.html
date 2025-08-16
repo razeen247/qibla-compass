@@ -1,0 +1,228 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Qibla Compass</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            color: #333;
+        }
+
+        .compass-container {
+            position: relative;
+            width: 300px;
+            height: 300px;
+            margin: 20px;
+        }
+
+        .compass-face {
+            width: 100%;
+            height: 100%;
+            background: #f8f9fa;
+            position: relative;
+            border-radius: 50%;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.2);
+            border: 8px solid #e9ecef;
+        }
+
+            /* Built-in compass design (no external image) */
+            .compass-face:before {
+                content: "";
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                width: 90%;
+                height: 90%;
+                transform: translate(-50%, -50%);
+                border-radius: 50%;
+                background: conic-gradient( #000 0deg 15deg, #fff 15deg 30deg, #000 30deg 45deg, #fff 45deg 60deg, #000 60deg 75deg, #fff 75deg 90deg, #000 90deg 105deg, #fff 105deg 120deg, #000 120deg 135deg, #fff 135deg 150deg, #000 150deg 165deg, #fff 165deg 180deg, #000 180deg 195deg, #fff 195deg 210deg, #000 210deg 225deg, #fff 225deg 240deg, #000 240deg 255deg, #fff 255deg 270deg, #000 270deg 285deg, #fff 285deg 300deg, #000 300deg 315deg, #fff 315deg 330deg, #000 330deg 345deg, #fff 345deg 360deg );
+            }
+
+            /* Mark the cardinal directions */
+            .compass-face:after {
+                content: "N";
+                position: absolute;
+                top: 10px;
+                left: 50%;
+                transform: translateX(-50%);
+                font-size: 24px;
+                font-weight: bold;
+                color: #e74c3c;
+            }
+
+        .compass-needle {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 40%;
+            height: 6px;
+            background-color: #e74c3c;
+            transform-origin: left center;
+            transform: translate(0, -50%) rotate(0deg);
+            transition: transform 0.5s ease-out;
+            z-index: 10;
+        }
+
+            .compass-needle:after {
+                content: '';
+                position: absolute;
+                right: -10px;
+                top: -10px;
+                width: 20px;
+                height: 20px;
+                background-color: #e74c3c;
+                border-radius: 50%;
+            }
+
+        .controls {
+            margin: 20px;
+            text-align: center;
+        }
+
+        button {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background 0.3s;
+        }
+
+            button:hover {
+                background: #2980b9;
+            }
+
+        #status {
+            margin: 15px;
+            font-size: 18px;
+            min-height: 50px;
+        }
+
+        .accuracy {
+            font-size: 14px;
+            color: #7f8c8d;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Live Qibla Compass</h1>
+
+    <div class="compass-container">
+        <div class="compass-face"></div>
+        <div class="compass-needle" id="needle"></div>
+    </div>
+
+    <div id="status">Click "Find Qibla" to start</div>
+    <div class="accuracy" id="accuracy"></div>
+
+    <div class="controls">
+        <button id="find-btn">Find Qibla</button>
+        <button id="reset-btn">Reset</button>
+    </div>
+
+    <script>
+        const needle = document.getElementById('needle');
+        const statusDiv = document.getElementById('status');
+        const accuracyDiv = document.getElementById('accuracy');
+        let watchId = null;
+
+        document.getElementById('find-btn').addEventListener('click', startCompass);
+        document.getElementById('reset-btn').addEventListener('click', resetCompass);
+
+        function startCompass() {
+            if (watchId) {
+                navigator.geolocation.clearWatch(watchId);
+            }
+
+            if (!navigator.geolocation) {
+                statusDiv.innerHTML = '<span style="color:red">Geolocation not supported by your browser</span>';
+                return;
+            }
+
+            statusDiv.textContent = 'Locating... (Please enable GPS for best accuracy)';
+
+            watchId = navigator.geolocation.watchPosition(
+                position => {
+                    const qiblaAngle = calculateQiblaDirection(
+                        position.coords.latitude,
+                        position.coords.longitude
+                    );
+
+                    // Rotate needle smoothly
+                    needle.style.transform = `translate(0, -50%) rotate(${qiblaAngle}deg)`;
+
+                    // Update status
+                    statusDiv.innerHTML = `Qibla Direction: <strong>${Math.round(qiblaAngle)}°</strong>`;
+                    accuracyDiv.textContent = `Accuracy: ±${position.coords.accuracy.toFixed(1)} meters`;
+                },
+                error => {
+                    let errorMsg = 'Error: ';
+                    switch (error.code) {
+                        case error.PERMISSION_DENIED:
+                            errorMsg += 'Location access denied.';
+                            break;
+                        case error.POSITION_UNAVAILABLE:
+                            errorMsg += 'Location unavailable.';
+                            break;
+                        case error.TIMEOUT:
+                            errorMsg += 'Location request timed out.';
+                            break;
+                        default:
+                            errorMsg += 'Unknown error.';
+                    }
+                    statusDiv.innerHTML = `<span style="color:red">${errorMsg}</span>`;
+                },
+                {
+                    enableHighAccuracy: true,
+                    maximumAge: 0,
+                    timeout: 5000
+                }
+            );
+        }
+
+        function calculateQiblaDirection(lat, lng) {
+            // Kaaba coordinates (Makkah)
+            const kaabaLat = 21.4225;
+            const kaabaLng = 39.8262;
+
+            // Convert to radians
+            const φ1 = lat * Math.PI / 180;
+            const λ1 = lng * Math.PI / 180;
+            const φ2 = kaabaLat * Math.PI / 180;
+            const λ2 = kaabaLng * Math.PI / 180;
+
+            // Calculate bearing
+            const y = Math.sin(λ2 - λ1) * Math.cos(φ2);
+            const x = Math.cos(φ1) * Math.sin(φ2) -
+                Math.sin(φ1) * Math.cos(φ2) * Math.cos(λ2 - λ1);
+            let θ = Math.atan2(y, x);
+            let bearing = (θ * 180 / Math.PI + 360) % 360;
+
+            return bearing;
+        }
+
+        function resetCompass() {
+            if (watchId) {
+                navigator.geolocation.clearWatch(watchId);
+                watchId = null;
+            }
+            needle.style.transform = 'translate(0, -50%) rotate(0deg)';
+            statusDiv.textContent = 'Compass reset. Click "Find Qibla" to start.';
+            accuracyDiv.textContent = '';
+        }
+    </script>
+</body>
+</html>
